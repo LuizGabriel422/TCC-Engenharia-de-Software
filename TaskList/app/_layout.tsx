@@ -31,6 +31,10 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="tarefas/nova" options={{ title: 'Nova tarefa' }} />
+        <Stack.Screen name="tarefas/[id]" options={{ title: 'Editar tarefa' }} />
+        <Stack.Screen name="categorias/nova" options={{ title: 'Nova categoria' }} />
+        <Stack.Screen name="categorias/[id]" options={{ title: 'Editar categoria' }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />

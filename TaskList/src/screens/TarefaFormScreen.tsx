@@ -333,6 +333,7 @@ export default function TarefaFormScreen() {
 
       {pickerAberto && (
         <DateTimePicker
+          locale="pt-BR"
           mode={pickerAberto === 'data' ? 'date' : 'time'}
           display="default"
           value={criarDataDoFormulario(

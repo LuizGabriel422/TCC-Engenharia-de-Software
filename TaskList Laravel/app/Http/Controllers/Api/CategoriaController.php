@@ -8,9 +8,11 @@ use App\Http\Controllers\Controller;
 
 class CategoriaController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Categoria::with('tarefas')->get());
+        return response()->json(
+            $request->user()->categorias()->with('tarefas')->get()
+        );
     }
 
     public function store(Request $request)
@@ -20,14 +22,17 @@ class CategoriaController extends Controller
             'cor' => 'nullable|string|max:20',
         ]);
 
-        $categoria = Categoria::create($request->only(['nome', 'cor']));
+        $dados = $request->only(['nome', 'cor']);
+        $dados['user_id'] = $request->user()->id;
+
+        $categoria = Categoria::create($dados);
 
         return response()->json($categoria, 201);
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        $categoria = Categoria::with('tarefas')->find($id);
+        $categoria = $request->user()->categorias()->with('tarefas')->where('id', $id)->first();
 
         if (!$categoria) {
             return response()->json(['message' => 'Categoria nao encontrada.'], 404);
@@ -38,7 +43,7 @@ class CategoriaController extends Controller
 
     public function update(Request $request, $id)
     {
-        $categoria = Categoria::find($id);
+        $categoria = $request->user()->categorias()->where('id', $id)->first();
 
         if (!$categoria) {
             return response()->json(['message' => 'Categoria nao encontrada.'], 404);
@@ -61,9 +66,9 @@ class CategoriaController extends Controller
         return response()->json($categoria);
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $categoria = Categoria::find($id);
+        $categoria = $request->user()->categorias()->where('id', $id)->first();
 
         if (!$categoria) {
             return response()->json(['message' => 'Categoria nao encontrada.'], 404);

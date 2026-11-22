@@ -10,6 +10,7 @@ class Tarefa extends Model
 
     protected $fillable = [
         'nome',
+        'user_id',
         'descricao',
         'data',
         'hora_inicio',
@@ -24,5 +25,10 @@ class Tarefa extends Model
             'id_tarefa',
             'id_categoria'
         )->withTimestamps();
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

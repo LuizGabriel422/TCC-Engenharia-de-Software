@@ -10,6 +10,7 @@ class Categoria extends Model
 
     protected $fillable = [
         'nome',
+        'user_id',
         'cor',
     ];
 
@@ -21,5 +22,10 @@ class Categoria extends Model
             'id_categoria',
             'id_tarefa'
         )->withTimestamps();
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

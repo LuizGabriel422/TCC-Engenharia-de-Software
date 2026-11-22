@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { api } from '@/src/services/api';
+import { useAuth } from '@/src/contexts/AuthContext';
 import type { Categoria, Tarefa } from '@/src/types/task';
 
 function formatarData(data: string) {
@@ -27,6 +28,7 @@ function formatarHora(hora: string) {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { logout, user } = useAuth();
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [busca, setBusca] = useState('');
@@ -98,12 +100,19 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Tarefas</Text>
-          <Text style={styles.subtitle}>{tarefasFiltradas.length} tarefa(s) encontrada(s)</Text>
+          <Text style={styles.subtitle}>
+            {user?.name ? `${user.name} - ` : ''}{tarefasFiltradas.length} tarefa(s)
+          </Text>
         </View>
 
-        <Pressable style={styles.iconButton} onPress={() => router.push('/tarefas/nova' as never)}>
-          <Ionicons name="add" size={26} color="#fff" />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable style={styles.logoutButton} onPress={logout}>
+            <Ionicons name="log-out-outline" size={22} color="#2563eb" />
+          </Pressable>
+          <Pressable style={styles.iconButton} onPress={() => router.push('/tarefas/nova' as never)}>
+            <Ionicons name="add" size={26} color="#fff" />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.searchBar}>
@@ -247,6 +256,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#2563eb',
     borderRadius: 8,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  logoutButton: {
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderColor: '#d8dee8',
+    borderRadius: 8,
+    borderWidth: 1,
     height: 44,
     justifyContent: 'center',
     width: 44,

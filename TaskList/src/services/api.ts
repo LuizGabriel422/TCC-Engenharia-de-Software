@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 
+import type { AuthResponse, LoginPayload, RegisterPayload, ResetPasswordPayload } from '@/src/types/auth';
 import type { Categoria, CategoriaPayload, Tarefa, TarefaPayload } from '@/src/types/task';
 
 const API_BASE_URL =
@@ -7,12 +8,19 @@ const API_BASE_URL =
     ? 'http://10.0.2.2:8000/api'
     : 'http://127.0.0.1:8000/api';
 
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...options.headers,
     },
   });
@@ -31,6 +39,26 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  login: (payload: LoginPayload) =>
+    request<AuthResponse>('/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  register: (payload: RegisterPayload) =>
+    request<AuthResponse>('/register', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  resetPassword: (payload: ResetPasswordPayload) =>
+    request<AuthResponse>('/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  logout: () =>
+    request<{ message: string }>('/logout', {
+      method: 'POST',
+    }),
+
   listarTarefas: () => request<Tarefa[]>('/tarefas'),
   buscarTarefa: (id: number) => request<Tarefa>(`/tarefas/${id}`),
   criarTarefa: (payload: TarefaPayload) =>

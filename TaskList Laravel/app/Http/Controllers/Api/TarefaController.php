@@ -8,9 +8,11 @@ use App\Http\Controllers\Controller;
 
 class TarefaController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Tarefa::with('categorias')->get());
+        return response()->json(
+            $request->user()->tarefas()->with('categorias')->get()
+        );
     }
 
     public function store(Request $request)
@@ -25,24 +27,32 @@ class TarefaController extends Controller
             'categoria_ids.*' => 'integer|exists:categorias,id',
         ]);
 
-        $tarefa = Tarefa::create($request->only([
+        $categoriaIds = $request->input('categoria_ids', []);
+        if (!$this->categoriasPertencemAoUsuario($request, $categoriaIds)) {
+            return response()->json(['message' => 'Uma ou mais categorias nao pertencem ao usuario.'], 422);
+        }
+
+        $dados = $request->only([
             'nome',
             'descricao',
             'data',
             'hora_inicio',
             'hora_termino',
-        ]));
+        ]);
+        $dados['user_id'] = $request->user()->id;
+
+        $tarefa = Tarefa::create($dados);
 
         if ($request->has('categoria_ids')) {
-            $tarefa->categorias()->sync($request->input('categoria_ids'));
+            $tarefa->categorias()->sync($categoriaIds);
         }
 
         return response()->json($tarefa->load('categorias'), 201);
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        $tarefa = Tarefa::with('categorias')->find($id);
+        $tarefa = $request->user()->tarefas()->with('categorias')->where('id', $id)->first();
 
         if (!$tarefa) {
             return response()->json(['message' => 'Tarefa nao encontrada.'], 404);
@@ -53,7 +63,7 @@ class TarefaController extends Controller
 
     public function update(Request $request, $id)
     {
-        $tarefa = Tarefa::find($id);
+        $tarefa = $request->user()->tarefas()->where('id', $id)->first();
 
         if (!$tarefa) {
             return response()->json(['message' => 'Tarefa nao encontrada.'], 404);
@@ -85,15 +95,20 @@ class TarefaController extends Controller
         }
 
         if ($request->has('categoria_ids')) {
-            $tarefa->categorias()->sync($request->input('categoria_ids'));
+            $categoriaIds = $request->input('categoria_ids', []);
+            if (!$this->categoriasPertencemAoUsuario($request, $categoriaIds)) {
+                return response()->json(['message' => 'Uma ou mais categorias nao pertencem ao usuario.'], 422);
+            }
+
+            $tarefa->categorias()->sync($categoriaIds);
         }
 
         return response()->json($tarefa->load('categorias'));
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        $tarefa = Tarefa::find($id);
+        $tarefa = $request->user()->tarefas()->where('id', $id)->first();
 
         if (!$tarefa) {
             return response()->json(['message' => 'Tarefa nao encontrada.'], 404);
@@ -102,5 +117,16 @@ class TarefaController extends Controller
         $tarefa->delete();
 
         return response()->json(['message' => 'Tarefa excluida com sucesso.']);
+    }
+
+    private function categoriasPertencemAoUsuario(Request $request, array $categoriaIds)
+    {
+        if (empty($categoriaIds)) {
+            return true;
+        }
+
+        $total = $request->user()->categorias()->whereIn('id', $categoriaIds)->count();
+
+        return $total === count(array_unique($categoriaIds));
     }
 }

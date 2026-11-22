@@ -1,188 +1,429 @@
-import React, {useEffect, useLayoutEffect} from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
-// Tipagem dos dados de tarefas
-interface Tarefa {
-  id: string;
-  tarefa: string;
-  data: string;
-  horaInicio: string;
-  horaTermino: string;
-  categoria: string;
+import { api } from '@/src/services/api';
+import { useAuth } from '@/src/contexts/AuthContext';
+import type { Categoria, Tarefa } from '@/src/types/task';
+
+function formatarData(data: string) {
+  const [ano, mes, dia] = data.split('-');
+  return `${dia}/${mes}/${ano}`;
 }
 
-const HomeScreen: React.FC = () => {
+function formatarHora(hora: string) {
+  return hora.slice(0, 5);
+}
 
-  const navigation = useNavigation();
+export default function HomeScreen() {
+  const router = useRouter();
+  const { logout, user } = useAuth();
+  const [tarefas, setTarefas] = useState<Tarefa[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [busca, setBusca] = useState('');
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState<number | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState('');
 
-  // Desativa o cabeçalho quando a tela for carregada
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: false, // Remove o cabeçalho
+  const carregarDados = useCallback(async () => {
+    try {
+      setErro('');
+      setCarregando(true);
+      const [tarefasApi, categoriasApi] = await Promise.all([
+        api.listarTarefas(),
+        api.listarCategorias(),
+      ]);
+
+      setTarefas(tarefasApi);
+      setCategorias(categoriasApi);
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Erro ao carregar tarefas.');
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      carregarDados();
+    }, [carregarDados])
+  );
+
+  const tarefasFiltradas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+
+    return tarefas.filter((tarefa) => {
+      const bateBusca =
+        !termo ||
+        tarefa.nome.toLowerCase().includes(termo) ||
+        (tarefa.descricao || '').toLowerCase().includes(termo);
+
+      const bateCategoria =
+        !categoriaSelecionada ||
+        tarefa.categorias.some((categoria) => categoria.id === categoriaSelecionada);
+
+      return bateBusca && bateCategoria;
     });
-  }, [navigation]);
+  }, [busca, categoriaSelecionada, tarefas]);
 
-  // Dados de exemplo
-  const tarefas: Tarefa[] = [
-    { id: '1', tarefa: 'Estudar React Native', data: '15/11/2024', horaInicio: '10:00', horaTermino: '14:00', categoria: 'Estudo' },
-    { id: '2', tarefa: 'Reunião de Trabalho', data: '16/11/2024', horaInicio: '14:00', horaTermino: '18:00', categoria: 'Trabalho' },
-    { id: '3', tarefa: 'Palestra', data: '17/11/2024', horaInicio: '18:00', horaTermino: '20:00', categoria: 'Estudo' },
-    { id: '4', tarefa: 'Estudar para Prova', data: '18/11/2024', horaInicio: '18:00', horaTermino: '22:00', categoria: 'Estudo' },
-    { id: '5', tarefa: 'Jogar', data: '19/11/2024', horaInicio: '16:00', horaTermino: '18:00', categoria: 'Lazer' },
-  ];
+  function confirmarExclusao(tarefa: Tarefa) {
+    Alert.alert('Excluir tarefa', `Deseja excluir "${tarefa.nome}"?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.excluirTarefa(tarefa.id);
+            carregarDados();
+          } catch (error) {
+            Alert.alert('Erro', error instanceof Error ? error.message : 'Erro ao excluir tarefa.');
+          }
+        },
+      },
+    ]);
+  }
 
   return (
     <View style={styles.container}>
-      {/* Botões no topo */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerButton}>
-          <Text style={styles.headerButtonText}>Categorias</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.headerButton}>
-          <Text style={styles.headerButtonText}>Tarefas Calendário</Text>
-        </TouchableOpacity>
+        <View>
+          <Text style={styles.title}>Tarefas</Text>
+          <Text style={styles.subtitle}>
+            {user?.name ? `${user.name} - ` : ''}{tarefasFiltradas.length} tarefa(s)
+          </Text>
+        </View>
+
+        <View style={styles.headerActions}>
+          <Pressable style={styles.logoutButton} onPress={logout}>
+            <Ionicons name="log-out-outline" size={22} color="#2563eb" />
+          </Pressable>
+          <Pressable style={styles.iconButton} onPress={() => router.push('/tarefas/nova' as never)}>
+            <Ionicons name="add" size={26} color="#fff" />
+          </Pressable>
+        </View>
       </View>
 
-      {/* Barra de pesquisa */}
       <View style={styles.searchBar}>
-        <Ionicons name="search" size={20} color="#888" style={styles.searchIcon} />
+        <Ionicons name="search" size={20} color="#697586" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Buscar tarefas..."
-          placeholderTextColor="#888"
+          placeholder="Buscar tarefas"
+          placeholderTextColor="#697586"
+          value={busca}
+          onChangeText={setBusca}
         />
       </View>
 
-      {/* Barra de seleção de categorias */}
-      <View style={styles.categoriesBar}>
-        <Text style={styles.category}>Todas</Text>
-        <Text style={styles.category}>Estudo</Text>
-        <Text style={styles.category}>Trabalho</Text>
-        <Text style={styles.category}>Lazer</Text>
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesBar}>
+        <Pressable
+          style={[styles.categoryChip, categoriaSelecionada === null && styles.categoryChipActive]}
+          onPress={() => setCategoriaSelecionada(null)}>
+          <Text
+            style={[
+              styles.categoryChipText,
+              categoriaSelecionada === null && styles.categoryChipTextActive,
+            ]}>
+            Todas
+          </Text>
+        </Pressable>
 
-      {/* Tabela */}
-      <FlatList
-        data={tarefas}
-        keyExtractor={(item) => item.id}
-        style={styles.table}
-        renderItem={({ item }) => (
-          <View style={styles.tableRow}>
-            <Text style={styles.tableCell}>{item.tarefa}</Text>
-            <Text style={styles.tableCell}>{item.data}</Text>
-            <Text style={styles.tableCell}>{item.horaInicio}</Text>
-            <Text style={styles.tableCell}>{item.horaTermino}</Text>
-            <Text style={styles.tableCell}>{item.categoria}</Text>
-          </View>
-        )}
-        ListHeaderComponent={() => (
-          <View style={[styles.tableRow, styles.tableHeader]}>
-            <Text style={styles.tableHeaderCell}>Tarefa</Text>
-            <Text style={styles.tableHeaderCell}>Data</Text>
-            <Text style={styles.tableHeaderCell}>Hora Inicio</Text>
-            <Text style={styles.tableHeaderCell}>Hora Termino</Text>
-            <Text style={styles.tableHeaderCell}>Categorias</Text>
-          </View>
-        )}
-      />
+        {categorias.map((categoria) => (
+          <Pressable
+            key={categoria.id}
+            style={[
+              styles.categoryChip,
+              categoriaSelecionada === categoria.id && styles.categoryChipActive,
+            ]}
+            onPress={() => setCategoriaSelecionada(categoria.id)}>
+            <Text
+              style={[
+                styles.categoryChipText,
+                categoriaSelecionada === categoria.id && styles.categoryChipTextActive,
+              ]}>
+              {categoria.nome}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
 
-      {/* Botão Nova Tarefa */}
-      <TouchableOpacity style={styles.addButton}>
-        <Text style={styles.addButtonText}>Nova Tarefa</Text>
-      </TouchableOpacity>
+      {carregando ? (
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color="#2563eb" />
+        </View>
+      ) : erro ? (
+        <View style={styles.centerContent}>
+          <Text style={styles.errorText}>{erro}</Text>
+          <Pressable style={styles.secondaryButton} onPress={carregarDados}>
+            <Text style={styles.secondaryButtonText}>Tentar novamente</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FlatList
+          data={tarefasFiltradas}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={<Text style={styles.emptyText}>Nenhuma tarefa cadastrada.</Text>}
+          renderItem={({ item }) => (
+            <View style={styles.taskCard}>
+              <View style={styles.taskHeader}>
+                <View style={styles.taskInfo}>
+                  <Text style={styles.taskTitle}>{item.nome}</Text>
+                  {!!item.descricao && <Text style={styles.taskDescription}>{item.descricao}</Text>}
+                </View>
+
+                <View style={styles.actions}>
+                  <Pressable
+                    style={styles.actionButton}
+                    onPress={() => router.push(`/tarefas/${item.id}` as never)}>
+                    <Ionicons name="create-outline" size={20} color="#2563eb" />
+                  </Pressable>
+                  <Pressable style={styles.actionButton} onPress={() => confirmarExclusao(item)}>
+                    <Ionicons name="trash-outline" size={20} color="#dc2626" />
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.metaRow}>
+                <Ionicons name="calendar-outline" size={16} color="#475467" />
+                <Text style={styles.metaText}>{formatarData(item.data)}</Text>
+                <Ionicons name="time-outline" size={16} color="#475467" />
+                <Text style={styles.metaText}>
+                  {formatarHora(item.hora_inicio)} - {formatarHora(item.hora_termino)}
+                </Text>
+              </View>
+
+              <View style={styles.tagRow}>
+                {item.categorias.length > 0 ? (
+                  item.categorias.map((categoria) => (
+                    <View key={categoria.id} style={styles.tag}>
+                      <View
+                        style={[
+                          styles.tagColor,
+                          { backgroundColor: categoria.cor || '#94a3b8' },
+                        ]}
+                      />
+                      <Text style={styles.tagText}>{categoria.nome}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noCategoryText}>Sem categoria</Text>
+                )}
+              </View>
+            </View>
+          )}
+        />
+      )}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 16,
+    paddingTop: 52,
   },
   header: {
+    alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
-    marginTop: 40,
+    marginBottom: 16,
   },
-  headerButton: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 10,
-    backgroundColor: '#007bff',
-    borderRadius: 5,
-    marginHorizontal: 5,
+  title: {
+    color: '#111827',
+    fontSize: 28,
+    fontWeight: '700',
   },
-  headerButtonText: {
-    color: '#fff',
+  subtitle: {
+    color: '#697586',
     fontSize: 14,
-    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  iconButton: {
+    alignItems: 'center',
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  logoutButton: {
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderColor: '#d8dee8',
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
   },
   searchBar: {
-    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 5,
-    paddingHorizontal: 10,
-    marginBottom: 10,
-  },
-  searchIcon: {
-    marginRight: 5,
+    backgroundColor: '#fff',
+    borderColor: '#d8dee8',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 8,
+    height: 46,
+    paddingHorizontal: 12,
   },
   searchInput: {
+    color: '#111827',
     flex: 1,
-    height: 40,
-    fontSize: 14,
+    fontSize: 15,
   },
   categoriesBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    flexGrow: 0,
+    marginVertical: 14,
   },
-  category: {
+  categoryChip: {
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderColor: '#d8dee8',
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: 'center',
+    marginRight: 8,
+    paddingHorizontal: 14,
+  },
+  categoryChipActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  categoryChipText: {
+    color: '#475467',
     fontSize: 14,
-    color: '#007bff',
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
-  table: {
-    flex: 1,
-    marginBottom: 10,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-  },
-  tableHeader: {
-    backgroundColor: '#f0f0f0',
-  },
-  tableCell: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 14,
-  },
-  tableHeaderCell: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  addButton: {
-    alignSelf: 'center',
-    backgroundColor: '#007bff',
-    padding: 15,
-    borderRadius: 5,
-  },
-  addButtonText: {
+  categoryChipTextActive: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  },
+  centerContent: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  errorText: {
+    color: '#b42318',
+    fontSize: 15,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  secondaryButton: {
+    borderColor: '#2563eb',
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  secondaryButtonText: {
+    color: '#2563eb',
+    fontWeight: '700',
+  },
+  listContent: {
+    paddingBottom: 24,
+  },
+  emptyText: {
+    color: '#697586',
+    fontSize: 15,
+    marginTop: 32,
+    textAlign: 'center',
+  },
+  taskCard: {
+    backgroundColor: '#fff',
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 12,
+    padding: 14,
+  },
+  taskHeader: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  taskInfo: {
+    flex: 1,
+  },
+  taskTitle: {
+    color: '#111827',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  taskDescription: {
+    color: '#475467',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  actionButton: {
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  metaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 12,
+  },
+  metaText: {
+    color: '#475467',
+    fontSize: 13,
+    marginRight: 8,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  tag: {
+    alignItems: 'center',
+    backgroundColor: '#eef2f7',
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  tagColor: {
+    borderRadius: 5,
+    height: 10,
+    width: 10,
+  },
+  tagText: {
+    color: '#344054',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  noCategoryText: {
+    color: '#697586',
+    fontSize: 13,
   },
 });
-
-export default HomeScreen;
